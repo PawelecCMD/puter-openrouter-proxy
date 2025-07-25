@@ -1,0 +1,159 @@
+<html>
+<head>
+    <title>💻 Cline – Twój AI Terminal</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #000;
+            color: #0f0;
+            padding: 20px;
+            margin: 0;
+        }
+        #terminal {
+            height: 70vh;
+            overflow-y: auto;
+            border: 1px solid #0f0;
+            padding: 10px;
+            margin-bottom: 10px;
+            white-space: pre-wrap;
+        }
+        #cmd {
+            width: 100%;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            background: #111;
+            color: #0f0;
+            border: 1px solid #0f0;
+        }
+        .prompt { color: #0ff; }
+        .output { color: #fff; }
+        .error { color: #f00; }
+    </style>
+</head>
+<body>
+    <div id="terminal"></div>
+    <input id="cmd" placeholder="Wpisz komendę... (np. help)" autofocus>
+
+    <!-- Puter.js SDK -->
+    <script src="https://js.puter.com/v2/"></script>
+    <script>
+        const term = document.getElementById('terminal');
+        const input = document.getElementById('cmd');
+
+        function log(text, type = '') {
+            const line = document.createElement('div');
+            line.className = type;
+            line.textContent = text;
+            term.appendChild(line);
+            term.scrollTop = term.scrollHeight;
+        }
+
+        function help() {
+            log('📚 DOSTĘPNE KOMENDY:', 'prompt');
+            log('  help           – pokaż pomoc');
+            log('  ls             – lista plików');
+            log('  put <nazwa>    – utwórz pusty plik');
+            log('  cat <nazwa>    – wyświetl zawartość pliku');
+            log('  ai "pytanie"   – zapytaj AI (np. ai "napisz kod Python")');
+            log('  host           – opublikuj folder jako stronę');
+            log('  clear          – wyczyść terminal');
+        }
+
+        async function ls() {
+            try {
+                const files = await puter.fs.list('/');
+                if (files.length === 0) {
+                    log('📁 Brak plików.', 'output');
+                } else {
+                    log('📁 Pliki: ' + files.map(f => f.name).join(', '), 'output');
+                }
+            } catch (e) {
+                log('❌ Błąd: ' + e.message, 'error');
+            }
+        }
+
+        async function put(filename) {
+            if (!filename) return log('❌ Użycie: put <nazwa>', 'error');
+            try {
+                await puter.fs.write(filename, '');
+                log(`✅ Utworzono plik: ${filename}`, 'output');
+            } catch (e) {
+                log('❌ Błąd: ' + e.message, 'error');
+            }
+        }
+
+        async function cat(filename) {
+            if (!filename) return log('❌ Użycie: cat <nazwa>', 'error');
+            try {
+                const blob = await puter.fs.read(filename);
+                const content = await blob.text();
+                log(`📄 Zawartość ${filename}:\n${content}`, 'output');
+            } catch (e) {
+                log(`❌ Plik "${filename}" nie istnieje.`, 'error');
+            }
+        }
+
+        async function ai(prompt) {
+            if (!prompt) return log('❌ Użycie: ai "twoje pytanie"', 'error');
+            log(`🧠 Pytam AI: ${prompt}`, 'prompt');
+            try {
+                const resp = await puter.ai.chat(prompt, { model: 'gpt-4o', stream: true });
+                let full = '';
+                for await (const part of resp) {
+                    if (part.text) {
+                        full += part.text;
+                        term.lastChild.textContent = `🧠 Odpowiedź:\n${full}`;
+                    }
+                }
+            } catch (e) {
+                log('❌ Błąd AI: ' + e.message, 'error');
+            }
+        }
+
+        async function host() {
+            const subdomain = puter.randName();
+            try {
+                const site = await puter.hosting.create(subdomain, '/');
+                log(`🌐 Strona opublikowana pod:\nhttps://${site.subdomain}.puter.site`, 'output');
+            } catch (e) {
+                log('❌ Błąd hostingu: ' + e.message, 'error');
+            }
+        }
+
+        function clear() {
+            term.innerHTML = '';
+            log('Terminal wyczyszczony.', 'output');
+        }
+
+        // Obsługa wpisywania komend
+        input.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter') {
+                const cmd = input.value.trim();
+                if (!cmd) return;
+                log(`> ${cmd}`, 'prompt');
+                input.value = '';
+
+                const args = cmd.split(' ');
+                const command = args[0].toLowerCase();
+                const rest = args.slice(1).join(' ').replace(/"/g, '');
+
+                switch (command) {
+                    case 'help': help(); break;
+                    case 'ls': await ls(); break;
+                    case 'put': await put(args[1]); break;
+                    case 'cat': await cat(args[1]); break;
+                    case 'ai': await ai(rest); break;
+                    case 'host': await host(); break;
+                    case 'clear': clear(); break;
+                    default: log(`❌ Nieznana komenda: ${command}. Wpisz 'help'.`, 'error');
+                }
+            }
+        });
+
+        // Start
+        log("💻 Witaj w Cline – Twoim AI terminalu!");
+        log("Wpisz 'help' by zobaczyć dostępne komendy.");
+    </script>
+</body>
+</html>
